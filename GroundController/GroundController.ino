@@ -30,6 +30,7 @@ struct TelemetryPacket {
 };
 
 struct ControlPacket {
+  bool emergencyStop;
   float power; // 0 to 1
   float roll; // -1 to 1
   float pitch; // -1 to 1
@@ -43,7 +44,7 @@ long lastPacket = millis();
 void onNewPacket(const esp_now_recv_info_t *info, const unsigned char *data, int len) {
 
   if (len != sizeof(telemetry)) {
-    Serial.println("Damaged Packet Received");
+    Serial.println("Unrecognized Packet Received");
   }
 
   long timeSinceLastPacket = millis() - lastPacket;
@@ -74,6 +75,8 @@ void setup() {
 
   delay(4000); // Await before sending anything over serial
 
+  // Init receiver
+
   if (esp_now_init() != ESP_OK) {
     Serial.println("Network initialization failed - client side");
     return;
@@ -82,24 +85,33 @@ void setup() {
 
   esp_wifi_set_mac(WIFI_IF_STA, &groundControllerMAC[0]);
   delay(100);
-  Serial.print("Ground Controller MAC Address: ");
+  Serial.print("Ground controller MAC Address: ");
   Serial.println(WiFi.macAddress());
 
   esp_now_register_recv_cb(onNewPacket);
 
   Serial.println("Ground controller telemetry receiver setup");
+
+  // Init transmitter
+
+  esp_now_peer_info_t peerInfo = {};
+  memcpy(peerInfo.peer_addr, flightControllerMAC, 6);
+  peerInfo.channel = 0;
+  peerInfo.encrypt = false;
+
+  Serial.println("Initializing connection to flight controller");
+  while (esp_now_add_peer(&peerInfo) != ESP_OK) {
+    delay(2000);
+  }
+
+  Serial.println("Connected to flight controller");
 }
 
 void loop() {
-  
+  if (!Serial.available()) {
+    delay(10);
+    return;
+  }
+
+  // TODO: Determine serial comms protocol.
 }
-
-
-/*
-Compilation error: invalid conversion from 
-'void (*)(const esp_now_recv_info_t*, const char*, int)' 
-'esp_now_recv_cb_t' 
-
-{aka 'void (*)(const esp_now_recv_info*, const char*, int)'}
-{aka 'void (*)(const esp_now_recv_info*, const unsigned char*, int)'}
-*/
